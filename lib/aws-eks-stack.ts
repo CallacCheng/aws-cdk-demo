@@ -1,28 +1,30 @@
 import * as cdk from '@aws-cdk/core';
 import * as eks from '@aws-cdk/aws-eks';
+import * as efs from '@aws-cdk/aws-efs';
 import * as ec2 from '@aws-cdk/aws-ec2';
 import * as iam from '@aws-cdk/aws-iam';
 
 import { ALBIngressController } from './k8sResources/ALBIngressController';
-import { EbsCsiDriver } from './k8sResources/EbsCsiDriver';
+//import { EbsCsiDriver } from './k8sResources/EbsCsiDriver';
 import { MetricsServer } from './k8sResources/MetricsServer';
+import { EfsCsiDriver } from './k8sResources/EfsCsiDriver';
 
 export class AwsEksStack extends cdk.Stack {
   constructor(scope: cdk.App, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    const clusterAdmin = new iam.Role(this, "AdminRole", {
+    const clusterAdmin = new iam.Role(this, 'AdminRole', {
       assumedBy: new iam.AccountRootPrincipal()
     })
 
     // define the vpc
-    const vpc = new ec2.Vpc(this, "quarkus-demo-vpc", {
+    const vpc = new ec2.Vpc(this, 'quarkus-demo-vpc', {
       maxAzs: 2
     });
 
     const cluster = new eks.Cluster(this, 'cluster', {
       version: eks.KubernetesVersion.V1_17,
-      clusterName: "MyEKSCluster",
+      clusterName: 'MyEKSCluster',
       mastersRole: clusterAdmin,
       defaultCapacity: 0,
       vpc,
@@ -58,14 +60,32 @@ export class AwsEksStack extends cdk.Stack {
     });
 
     albIngressController.node.addDependency(cluster);
-
+    // mask EBS CSI driver
     // add EBS CSI driver
-    new EbsCsiDriver(this, 'ebs-csi-driver', {
-      cluster: cluster,
-      nodeGroup: frist
-    });
+    // new EbsCsiDriver(this, 'ebs-csi-driver', {
+    //   cluster: cluster,
+    //   nodeGroup: frist
+    // });
 
     new MetricsServer(this, 'metrics-server', { cluster });
+
+    // efs new filesystem .
+    const fileSystem = new efs.FileSystem(this, 'FileSystem', {
+      vpc: vpc,
+      encrypted: false,
+      lifecyclePolicy: efs.LifecyclePolicy.AFTER_14_DAYS,
+      performanceMode: efs.PerformanceMode.GENERAL_PURPOSE,
+      throughputMode: efs.ThroughputMode.BURSTING
+    });
+
+    // add efs ingress for ec2 .
+    fileSystem.connections.allowDefaultPortFrom(ec2.Peer.ipv4(vpc.vpcCidrBlock),
+      'allow access efs from inside vpc');
+    const efsCsiDriver =new EfsCsiDriver(this, 'efs-csi-driver', {
+      cluster: cluster,
+      fileSystemId: fileSystem.fileSystemId,
+    });
+    efsCsiDriver.node.addDependency(fileSystem);
 
   }
 
