@@ -4,7 +4,7 @@ import { AwsEksStack } from '../lib/aws-eks-stack';
 
 const app = new cdk.App();
 const env = {
-    account: "xxxxxxxxx",
-    region: 'us-east-1'
-  };
+  region: process.env.CDK_DEFAULT_REGION,
+account: process.env.CDK_DEFAULT_ACCOUNT,
+};
 new AwsEksStack(app, 'AwsEksStack', {env});
