@@ -6,25 +6,23 @@ import * as fs from "fs";
 
 export interface EBSCSIDriverProps {
   readonly cluster: eks.Cluster;
+  nodeGroup: eks.Nodegroup;
 }
 
 export class EbsCsiDriver extends cdk.Construct {
   constructor(scope: cdk.Construct, id: string, props: EBSCSIDriverProps) {
     super(scope, id);
 
-    const ebsNamespace = "kube-system";
-    const ebsServiceAccount = props.cluster.addServiceAccount("ebs-csi-driver", {
-      name: "ebs-csi-driver",
-      namespace: ebsNamespace,
-    });
+    const policy = new iam.Policy(this, "ebs-csi-driver", {
+      statements: json2statements()
+    })
 
-    const policyJson = fs.readFileSync("./assets/ebs-csi-driver/ebs-csi-driver.json").toString();
+    props.nodeGroup.role.attachInlinePolicy(policy)
 
-    ((JSON.parse(policyJson))["Statement"] as []).forEach((statement, idx, array) => {
-      ebsServiceAccount.addToPolicy(iam.PolicyStatement.fromJson(statement));
-    });
-
-    props.cluster.awsAuth.addRoleMapping
+    function json2statements(): iam.PolicyStatement[] {
+      const jsonObject = JSON.parse(fs.readFileSync("./assets/ebs-csi-driver/ebs-csi-driver.json", 'utf8'));
+      return jsonObject.Statement.map((statement: any) => iam.PolicyStatement.fromJson(statement));
+    }
 
     const ebsDeployment = yaml.safeLoadAll(fs.readFileSync("./assets/ebs-csi-driver/ebs-csi-driver.yaml").toString());
 

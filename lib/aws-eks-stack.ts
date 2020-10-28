@@ -5,6 +5,7 @@ import * as iam from '@aws-cdk/aws-iam';
 
 import { ALBIngressController } from './k8sResources/ALBIngressController';
 import { EbsCsiDriver } from './k8sResources/EbsCsiDriver';
+import { MetricsServer } from './k8sResources/MetricsServer';
 
 export class AwsEksStack extends cdk.Stack {
   constructor(scope: cdk.App, id: string, props?: cdk.StackProps) {
@@ -59,7 +60,12 @@ export class AwsEksStack extends cdk.Stack {
     albIngressController.node.addDependency(cluster);
 
     // add EBS CSI driver
-    new EbsCsiDriver(this, 'ebs-csi-driver', {cluster});
+    new EbsCsiDriver(this, 'ebs-csi-driver', {
+      cluster: cluster,
+      nodeGroup: frist
+    });
+
+    new MetricsServer(this, 'metrics-server', { cluster });
 
   }
 
